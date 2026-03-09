@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TiltSelect Evaluation</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="eval-header">
+      <h1>TiltSelect Evaluation</h1>
+    </div>
+
+    <div id="consent-screen" class="screen">
+      <div class="card">
+        <h2>Welcome</h2>
+        <p>This is a short study for a Mobile HCI coursework project at the University of Glasgow.</p>
+        <p><strong>What you will do:</strong> tilt your phone to move through a menu, then try two ways of selecting an item: <strong>shaking</strong> the phone and <strong>making a sound</strong>. It should take about 5 to 10 minutes.</p>
+        <p><strong>What is recorded:</strong> task times, accuracy, skipped trials, and answers to a short questionnaire. No personal details are collected.</p>
+        <p><strong>Taking part is optional:</strong> you can stop at any point by closing the page. Nothing is submitted until the end.</p>
+        <button class="btn-primary" onclick="acceptConsent()">I agree. Start</button>
+        <button class="btn-secondary btn-danger" onclick="declineConsent()">I do not wish to participate</button>
+      </div>
+    </div>
+
+    <div id="calibration-screen" class="screen" style="display:none;">
+      <div class="card" style="text-align:center;">
+        <h2>Calibration</h2>
+        <p>Hold your phone in a comfortable, natural position.</p>
+        <p>Hold still for a moment.</p>
+        <div style="margin:16px 0;">
+          <div style="background:#e0e0e0; border-radius:8px; height:12px; overflow:hidden;">
+            <div id="cal-bar" style="background:#26c6da; height:100%; width:0%; transition:width 0.3s;"></div>
+          </div>
+          <p class="hint" id="cal-status">Waiting for sensor data...</p>
+        </div>
+      </div>
+    </div>
+
+    <div id="instructions-screen" class="screen" style="display:none;">
+      <div class="card">
+        <h2>How It Works</h2>
+        <div id="condition-label" style="text-align:center; padding:8px 14px; border-radius:6px; font-size:0.85em; font-weight:bold; margin-bottom:12px; background:#e0f7fa; color:#006064;"></div>
+        <div class="instruction-step">
+          <div class="instruction-num">1</div>
+          <div><strong>Tilt up/down</strong> to move the highlight through the menu items.</div>
+        </div>
+        <div class="instruction-step">
+          <div class="instruction-num">2</div>
+          <div><strong>Hold still</strong> on your target. The indicator will turn orange when it is ready.</div>
+        </div>
+        <div class="instruction-step">
+          <div class="instruction-num">3</div>
+          <div id="instruction-confirm"></div>
+        </div>
+        <p style="margin-top:16px; font-size:0.9em; color:#666;">You will start with practice. Take as long as you need. When you are ready, tap <strong>I'm ready</strong> to begin the real trials.</p>
+        <button class="btn-primary" onclick="startOpenPractice()">Start Practice</button>
+      </div>
+    </div>
+
+    <div id="eval-ui" style="display:none;">
+
+      <div class="phase-banner" id="phase-banner">Practice</div>
+
+      <div class="eval-info" id="trial-info" style="display:none;">
+        <span>Trial <strong><span id="info-trial">0</span></strong> of <strong><span id="info-total">0</span></strong></span>
+      </div>
+
+      <div class="target-prompt waiting" id="target-prompt">
+        Tap "Next" to begin
+      </div>
+
+      <div id="status-bar" class="status-bar status-targeting">Ready</div>
+
+      <div class="shake-indicator" id="confirm-indicator">
+        <div class="shake-icon" id="confirm-icon">&#8651;</div>
+        <span id="confirm-label">Ready</span>
+      </div>
+
+      <div id="menu-container" class="menu-container">
+        <div class="scrollbar-track" id="scrollbar-track">
+          <div class="scrollbar-thumb" id="scrollbar-thumb"></div>
+        </div>
+        <div class="menu-items" id="menu-items">
+          <div class="menu-item" data-index="0">Netflix</div>
+          <div class="menu-item" data-index="1">YouTube</div>
+          <div class="menu-item" data-index="2">Instagram</div>
+          <div class="menu-item" data-index="3">Snapchat</div>
+          <div class="menu-item" data-index="4">WhatsApp</div>
+        </div>
+      </div>
+
+      <div class="eval-controls" id="eval-controls">
+        <button id="next-trial-btn" onclick="nextTrial()">Next</button>
+        <button id="skip-btn" onclick="skipTrial()" style="display:none; background:#fff3e0; border-color:#e65100; color:#e65100;">Skip this one</button>
+      </div>
+
+      <button class="btn-primary" id="ready-btn" onclick="endOpenPractice()" style="display:none; margin-top:8px; background:#ff9800;">I'm ready. Start the real trials</button>
+    </div>
+
+    <div class="screen" id="survey-screen" style="display:none;">
+      <div class="card">
+        <h3 id="survey-title">Post-Condition Questionnaire</h3>
+        <p style="font-size:0.85em; color:#666; margin-bottom:12px;">
+          Rate each statement from 1 (Strongly Disagree) to 7 (Strongly Agree).
+        </p>
+
+        <div class="survey-question">
+          <p>1. It was easy to navigate to the correct item by tilting.</p>
+          <div class="likert-scale">
+            <label><input type="radio" name="q1" value="1" />1<br/>Strongly Disagree</label>
+            <label><input type="radio" name="q1" value="2" />2</label>
+            <label><input type="radio" name="q1" value="3" />3</label>
+            <label><input type="radio" name="q1" value="4" />4</label>
+            <label><input type="radio" name="q1" value="5" />5</label>
+            <label><input type="radio" name="q1" value="6" />6</label>
+            <label><input type="radio" name="q1" value="7" />7<br/>Strongly Agree</label>
+          </div>
+        </div>
+
+        <div class="survey-question">
+          <p>2. It was easy to confirm my selection using this method.</p>
+          <div class="likert-scale">
+            <label><input type="radio" name="q2" value="1" />1<br/>Strongly Disagree</label>
+            <label><input type="radio" name="q2" value="2" />2</label>
+            <label><input type="radio" name="q2" value="3" />3</label>
+            <label><input type="radio" name="q2" value="4" />4</label>
+            <label><input type="radio" name="q2" value="5" />5</label>
+            <label><input type="radio" name="q2" value="6" />6</label>
+            <label><input type="radio" name="q2" value="7" />7<br/>Strongly Agree</label>
+          </div>
+        </div>
+
+        <div class="survey-question">
+          <p>3. The confirmation method felt natural and intuitive.</p>
+          <div class="likert-scale">
+            <label><input type="radio" name="q3" value="1" />1<br/>Strongly Disagree</label>
+            <label><input type="radio" name="q3" value="2" />2</label>
+            <label><input type="radio" name="q3" value="3" />3</label>
+            <label><input type="radio" name="q3" value="4" />4</label>
+            <label><input type="radio" name="q3" value="5" />5</label>
+            <label><input type="radio" name="q3" value="6" />6</label>
+            <label><input type="radio" name="q3" value="7" />7<br/>Strongly Agree</label>
+          </div>
+        </div>
+
+        <div class="survey-question">
+          <p>4. The confirmation action required too much physical effort.</p>
+          <div class="likert-scale">
+            <label><input type="radio" name="q4" value="1" />1<br/>Strongly Disagree</label>
+            <label><input type="radio" name="q4" value="2" />2</label>
+            <label><input type="radio" name="q4" value="3" />3</label>
+            <label><input type="radio" name="q4" value="4" />4</label>
+            <label><input type="radio" name="q4" value="5" />5</label>
+            <label><input type="radio" name="q4" value="6" />6</label>
+            <label><input type="radio" name="q4" value="7" />7<br/>Strongly Agree</label>
+          </div>
+        </div>
+
+        <div class="survey-question">
+          <p>5. The system sometimes confirmed when I did not intend it to.</p>
+          <div class="likert-scale">
+            <label><input type="radio" name="q5" value="1" />1<br/>Strongly Disagree</label>
+            <label><input type="radio" name="q5" value="2" />2</label>
+            <label><input type="radio" name="q5" value="3" />3</label>
+            <label><input type="radio" name="q5" value="4" />4</label>
+            <label><input type="radio" name="q5" value="5" />5</label>
+            <label><input type="radio" name="q5" value="6" />6</label>
+            <label><input type="radio" name="q5" value="7" />7<br/>Strongly Agree</label>
+          </div>
+        </div>
+
+        <div class="survey-question">
+          <p>6. The visual feedback made it clear what was happening at all times.</p>
+          <div class="likert-scale">
+            <label><input type="radio" name="q6" value="1" />1<br/>Strongly Disagree</label>
+            <label><input type="radio" name="q6" value="2" />2</label>
+            <label><input type="radio" name="q6" value="3" />3</label>
+            <label><input type="radio" name="q6" value="4" />4</label>
+            <label><input type="radio" name="q6" value="5" />5</label>
+            <label><input type="radio" name="q6" value="6" />6</label>
+            <label><input type="radio" name="q6" value="7" />7<br/>Strongly Agree</label>
+          </div>
+        </div>
+
+        <div class="survey-question">
+          <p>7. I was able to complete selections quickly.</p>
+          <div class="likert-scale">
+            <label><input type="radio" name="q7" value="1" />1<br/>Strongly Disagree</label>
+            <label><input type="radio" name="q7" value="2" />2</label>
+            <label><input type="radio" name="q7" value="3" />3</label>
+            <label><input type="radio" name="q7" value="4" />4</label>
+            <label><input type="radio" name="q7" value="5" />5</label>
+            <label><input type="radio" name="q7" value="6" />6</label>
+            <label><input type="radio" name="q7" value="7" />7<br/>Strongly Agree</label>
+          </div>
+        </div>
+
+        <div class="survey-question">
+          <p>8. I would feel comfortable using this method in a public setting.</p>
+          <div class="likert-scale">
+            <label><input type="radio" name="q8" value="1" />1<br/>Strongly Disagree</label>
+            <label><input type="radio" name="q8" value="2" />2</label>
+            <label><input type="radio" name="q8" value="3" />3</label>
+            <label><input type="radio" name="q8" value="4" />4</label>
+            <label><input type="radio" name="q8" value="5" />5</label>
+            <label><input type="radio" name="q8" value="6" />6</label>
+            <label><input type="radio" name="q8" value="7" />7<br/>Strongly Agree</label>
+          </div>
+        </div>
+
+        <div id="comparison-questions" style="display:none;">
+          <hr style="margin:20px 0; border:none; border-top:1px solid #ddd;" />
+          <p style="font-size:0.85em; color:#006064; font-weight:bold; margin-bottom:12px;">
+            Now that you have tried both methods:
+          </p>
+
+          <div class="survey-question">
+            <p>9. Which confirmation method did you prefer overall?</p>
+            <div style="display:flex; gap:8px;">
+              <label style="flex:1; display:flex; align-items:center; gap:6px; font-size:0.9em; cursor:pointer;">
+                <input type="radio" name="q9" value="shake" /> Shake
+              </label>
+              <label style="flex:1; display:flex; align-items:center; gap:6px; font-size:0.9em; cursor:pointer;">
+                <input type="radio" name="q9" value="sound" /> Sound
+              </label>
+              <label style="flex:1; display:flex; align-items:center; gap:6px; font-size:0.9em; cursor:pointer;">
+                <input type="radio" name="q9" value="no_preference" /> No preference
+              </label>
+            </div>
+          </div>
+
+          <div class="survey-question">
+            <p>10. In which situation would you prefer <strong>shake</strong> over <strong>sound</strong>?</p>
+            <textarea id="context-text" class="form-input" style="height:60px;" placeholder="e.g. noisy environment, public transport..."></textarea>
+          </div>
+
+          <div class="survey-question">
+            <p>11. Any other comments about either method?</p>
+            <textarea id="preference-text" class="form-input" style="height:60px;" placeholder="What worked well? What was frustrating?"></textarea>
+          </div>
+
+          <div class="survey-question">
+            <p>12. What device did you use for this study?</p>
+            <input type="text" id="device-text" class="form-input" placeholder="e.g. iPhone 14, Samsung Galaxy S23..." />
+          </div>
+        </div>
+
+        <button class="btn-primary" onclick="submitSurvey()">Submit</button>
+      </div>
+    </div>
+
+    <div id="condition2-screen" class="screen" style="display:none;">
+      <div class="card" style="text-align:center;">
+        <h2>Part 1 Complete!</h2>
+        <p>You have completed the first method.</p>
+        <p>Next you will try the <strong>second method</strong>. The tilt navigation stays the same. Only the way you <strong>select</strong> changes.</p>
+        <p id="condition2-description" style="font-weight:bold; color:#006064;"></p>
+        <button class="btn-primary" onclick="startCondition2()">Continue</button>
+      </div>
+    </div>
+
+    <div id="thankyou-screen" class="screen" style="display:none;">
+      <div class="card" style="text-align:center;">
+        <h2>Thank You!</h2>
+        <p>Your responses have been submitted successfully.</p>
+        <p style="font-size:0.85em; color:#666;">You may now close this page.</p>
+        <button class="btn-primary" onclick="location.href='index.html'">Done</button>
+      </div>
+    </div>
+
+    <div id="declined-screen" class="screen" style="display:none;">
+      <div class="card" style="text-align:center;">
+        <h2>Thank You</h2>
+        <p>No problem. No data has been collected. You may close this page.</p>
+        <a href="index.html" class="back-link">&larr; Back to home</a>
+      </div>
+    </div>
+
+    <script>
+      const MENU_LABELS = ["Netflix", "YouTube", "Instagram", "Snapchat", "WhatsApp"];
+      const MENU_COUNT = 5;
+      const REAL_TRIALS = 8;
+
+      const TILT_RANGE = 30;
+      const SMOOTHING = 0.25;
+      const HYSTERESIS_DEG = 2;
+
+      const SHAKE_THRESHOLD = 25;
+      const SOUND_THRESHOLD = 0.15;
+      const STABILITY_MS = 200;
+      const COOLDOWN_MS = 1000;
+
+      const CAL_SAMPLES = 20;
+      let calSamples = [];
+      let calDone = false;
+
+      let participantId = "P" + Date.now().toString(36).toUpperCase();
+
+      let conditionOrder = [];
+      let conditionIndex = 0;
+
+      let sensorsReady = false;
+      let orientationReceived = false;
+      let motionReceived = false;
+
+      let trials = [];
+      let trialResults = [];
+      let currentTrialIndex = -1;
+      let trialActive = false;
+      let trialStartTime = 0;
+      let trialRetries = 0;
+      let targetIndex = -1;
+      let isPractice = true;
+      let isOpenPractice = false;
+
+      let allConditionResults = [];
+
+      let appState = "idle";
+      let currentIndex = -1;
+      let neutralBeta = 0;
+      let smoothBeta = null;
+      let smoothGamma = null;
+      let targetStableSince = 0;
+      let lastConfirmTime = 0;
+      let cooldownUntil = 0;
+
+      let audioContext = null;
+      let analyser = null;
+      let micStream = null;
+      let audioDataArray = null;
+      let micReady = false;
+
+      const menuItems = document.querySelectorAll(".menu-item");
+      const scrollThumb = document.getElementById("scrollbar-thumb");
+      const scrollTrack = document.getElementById("scrollbar-track");
+      const statusBar = document.getElementById("status-bar");
+      const targetPrompt = document.getElementById("target-prompt");
+      const confirmLabel = document.getElementById("confirm-label");
+      const confirmIndicator = document.getElementById("confirm-indicator");
+      const confirmIcon = document.getElementById("confirm-icon");
+      const phaseBanner = document.getElementById("phase-banner");
+
+      function currentCondition() { return conditionOrder[conditionIndex]; }
+
+      function showScreen(id) {
+        document.querySelectorAll(".screen").forEach(s => s.style.display = "none");
+        document.getElementById("eval-ui").style.display = "none";
+        if (id) document.getElementById(id).style.display = "block";
+      }
+
+      function acceptConsent() {
+        if (Math.random() < 0.5) {
+          conditionOrder = ["shake", "sound"];
+        } else {
+          conditionOrder = ["sound", "shake"];
+        }
+        conditionIndex = 0;
+        startEvaluation();
+      }
+
+      function declineConsent() { showScreen("declined-screen"); }
+
+      async function startEvaluation() {
+        if (sessionStorage.getItem("tiltselect_access_ready") !== "1") {
+          alert("Please go back to the home page and enable access before starting the evaluation.");
+          return;
+        }
+
+        window.addEventListener("deviceorientation", onOrientation);
+        window.addEventListener("devicemotion", onMotion);
+
+        try {
+          micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          audioContext = new (window.AudioContext || window.webkitAudioContext)();
+          let source = audioContext.createMediaStreamSource(micStream);
+          analyser = audioContext.createAnalyser();
+          analyser.fftSize = 512;
+          source.connect(analyser);
+          audioDataArray = new Uint8Array(analyser.fftSize);
+          micReady = true;
+        } catch (err) {
+          micReady = false;
+        }
+
+        startAutoCalibration();
+      }
+
+      function startAutoCalibration() {
+        showScreen("calibration-screen");
+        calSamples = [];
+        calDone = false;
+        document.getElementById("cal-bar").style.width = "0%";
+        document.getElementById("cal-bar").style.background = "#26c6da";
+        document.getElementById("cal-status").textContent = orientationReceived
+          ? "Calibrating. Hold still" : "Waiting for sensor data.";
+      }
+
+      function addCalSample(beta) {
+        if (calDone) return;
+        calSamples.push(beta);
+        let pct = Math.min(100, Math.round((calSamples.length / CAL_SAMPLES) * 100));
+        document.getElementById("cal-bar").style.width = pct + "%";
+        document.getElementById("cal-status").textContent = "Calibrating. Hold still";
+
+        if (calSamples.length >= CAL_SAMPLES) {
+          calDone = true;
+          neutralBeta = calSamples.reduce((a, b) => a + b, 0) / calSamples.length;
+          document.getElementById("cal-bar").style.width = "100%";
+          document.getElementById("cal-bar").style.background = "#66bb6a";
+          document.getElementById("cal-status").textContent = "Calibrated!";
+          setTimeout(() => { showInstructions(); }, 600);
+        }
+      }
+
+      function showInstructions() {
+        let cond = currentCondition();
+        let condLabel = document.getElementById("condition-label");
+        let instrConfirm = document.getElementById("instruction-confirm");
+
+        if (cond === "shake") {
+          condLabel.textContent = "Method: Shake";
+          instrConfirm.innerHTML = "<strong>Shake the phone</strong> to select the highlighted item. You should feel a short vibration.";
+          confirmIcon.innerHTML = "&#8651;";
+        } else {
+          condLabel.textContent = "Method: Sound";
+          instrConfirm.innerHTML = "<strong>Make a sound</strong> like saying \"go\", clapping, or tapping the table to select the highlighted item.";
+          confirmIcon.innerHTML = "&#127908;";
+        }
+        showScreen("instructions-screen");
+      }
+
+      function startOpenPractice() {
+        isPractice = true;
+        isOpenPractice = true;
+        currentTrialIndex = -1;
+        currentIndex = -1;
+
+        phaseBanner.textContent = "Free Practice";
+        phaseBanner.className = "phase-banner phase-practice";
+        document.getElementById("trial-info").style.display = "none";
+        document.getElementById("ready-btn").style.display = "block";
+        document.getElementById("skip-btn").style.display = "none";
+
+        showScreen(null);
+        document.getElementById("eval-ui").style.display = "block";
+
+        appState = "targeting";
+        trials = generateTrials(50);
+        targetPrompt.textContent = 'Tap "Next" to try a selection';
+        targetPrompt.className = "target-prompt waiting";
+        updateConfirmLabel("idle");
+        document.getElementById("next-trial-btn").disabled = false;
+      }
+
+      function endOpenPractice() {
+        isPractice = false;
+        isOpenPractice = false;
+        trials = generateTrials(REAL_TRIALS);
+        trialResults = [];
+        currentTrialIndex = -1;
+        currentIndex = -1;
+
+        phaseBanner.textContent = "Study";
+        phaseBanner.className = "phase-banner phase-study";
+        document.getElementById("trial-info").style.display = "flex";
+        document.getElementById("info-total").textContent = REAL_TRIALS;
+        document.getElementById("ready-btn").style.display = "none";
+        document.getElementById("skip-btn").style.display = "block";
+
+        appState = "targeting";
+        targetPrompt.textContent = 'Tap "Next" to begin';
+        targetPrompt.className = "target-prompt waiting";
+        updateConfirmLabel("idle");
+        document.getElementById("next-trial-btn").disabled = false;
+      }
+
+      function generateTrials(n) {
+        let list = [];
+        for (let i = 0; i < MENU_COUNT; i++) list.push(i);
+        while (list.length < n) list.push(Math.floor(Math.random() * MENU_COUNT));
+        for (let i = list.length - 1; i > 0; i--) {
+          let j = Math.floor(Math.random() * (i + 1));
+          [list[i], list[j]] = [list[j], list[i]];
+        }
+        for (let i = 1; i < list.length; i++) {
+          if (list[i] === list[i - 1]) {
+            for (let k = i + 1; k < list.length; k++) {
+              if (list[k] !== list[i - 1]) { [list[i], list[k]] = [list[k], list[i]]; break; }
+            }
+          }
+        }
+        return list;
+      }
+
+      function nextTrial() {
+        currentTrialIndex++;
+
+        if (!isOpenPractice && !isPractice && currentTrialIndex >= REAL_TRIALS) {
+          endCondition();
+          return;
+        }
+
+        if (currentTrialIndex >= trials.length) {
+          trials = generateTrials(50);
+          currentTrialIndex = 0;
+        }
+
+        targetIndex = trials[currentTrialIndex];
+        trialActive = true;
+        trialStartTime = Date.now();
+        trialRetries = 0;
+        appState = "targeting";
+
+        if (!isOpenPractice) {
+          document.getElementById("info-trial").textContent = currentTrialIndex + 1;
+        }
+
+        targetPrompt.textContent = "Select: " + MENU_LABELS[targetIndex];
+        targetPrompt.className = "target-prompt waiting";
+        statusBar.textContent = "Tilt to navigate.";
+        statusBar.className = "status-bar status-targeting";
+        confirmIndicator.classList.remove("shake-confirmed", "shake-cooldown", "shake-ready");
+        updateConfirmLabel("waiting");
+
+        document.getElementById("next-trial-btn").disabled = true;
+        document.getElementById("skip-btn").disabled = false;
+        menuItems.forEach(item => item.classList.remove("highlighted", "confirmed"));
+      }
+
+      function skipTrial() {
+        if (!trialActive) return;
+        let elapsed = Date.now() - trialStartTime;
+        trialActive = false;
+
+        if (!isPractice && !isOpenPractice) {
+          trialResults.push({
+            trial: currentTrialIndex + 1,
+            target: MENU_LABELS[targetIndex],
+            selected: "SKIPPED",
+            correct: false,
+            time: elapsed,
+            retries: trialRetries,
+            skipped: true
+          });
+        }
+
+        targetPrompt.textContent = "Skipped. Move to the next trial";
+        targetPrompt.className = "target-prompt incorrect";
+        document.getElementById("next-trial-btn").disabled = false;
+        document.getElementById("skip-btn").disabled = true;
+        appState = "targeting";
+      }
+
+      function recordActivation(selectedIndex) {
+        if (!trialActive) return;
+        let elapsed = Date.now() - trialStartTime;
+        let correct = selectedIndex === targetIndex;
+
+        if (correct) {
+          trialActive = false;
+          appState = "idle";
+          if (!isPractice && !isOpenPractice) {
+            trialResults.push({
+              trial: currentTrialIndex + 1,
+              target: MENU_LABELS[targetIndex],
+              selected: MENU_LABELS[selectedIndex],
+              correct: true,
+              time: elapsed,
+              retries: trialRetries,
+              skipped: false
+            });
+          }
+          targetPrompt.textContent = "Correct. Tap Next to continue.";
+          targetPrompt.className = "target-prompt correct";
+          statusBar.textContent = "Correct. Tap Next.";
+          statusBar.className = "status-bar status-confirmed";
+          confirmIndicator.classList.remove("shake-ready", "shake-cooldown");
+          confirmLabel.textContent = "Tap Next to continue";
+          document.getElementById("next-trial-btn").disabled = false;
+          document.getElementById("skip-btn").disabled = true;
+        } else {
+          trialRetries++;
+          if (!isPractice && !isOpenPractice) {
+            trialResults.push({
+              trial: currentTrialIndex + 1,
+              target: MENU_LABELS[targetIndex],
+              selected: MENU_LABELS[selectedIndex],
+              correct: false,
+              time: elapsed,
+              retries: trialRetries,
+              skipped: false
+            });
+          }
+          targetPrompt.textContent =
+            "Target: " + MENU_LABELS[targetIndex] +
+            " | You chose: " + MENU_LABELS[selectedIndex] +
+            ". Try again.";
+          targetPrompt.className = "target-prompt incorrect";
+          statusBar.textContent = "Try again.";
+          statusBar.className = "status-bar status-targeting";
+          updateConfirmLabel("waiting");
+        }
+      }
+
+      function endCondition() {
+        trialActive = false;
+        appState = "idle";
+
+        if (conditionIndex === 1) {
+          document.getElementById("comparison-questions").style.display = "block";
+          document.getElementById("survey-title").textContent =
+            "Final Questionnaire (" + currentCondition() + " confirmation)";
+        } else {
+          document.getElementById("comparison-questions").style.display = "none";
+          document.getElementById("survey-title").textContent =
+            "Questionnaire (" + currentCondition() + " confirmation)";
+        }
+
+        document.querySelectorAll('#survey-screen input[type="radio"]').forEach(r => r.checked = false);
+        document.getElementById("eval-ui").style.display = "none";
+        showScreen("survey-screen");
+      }
+
+      function onOrientation(event) {
+        let beta = event.beta;
+        if (beta === null) return;
+        orientationReceived = true;
+
+        smoothBeta = smoothBeta === null ? beta : SMOOTHING * beta + (1 - SMOOTHING) * smoothBeta;
+        smoothGamma = event.gamma;
+
+        if (!calDone && document.getElementById("calibration-screen").style.display !== "none") {
+          addCalSample(beta);
+          return;
+        }
+
+        if (appState === "idle") return;
+
+        let now = Date.now();
+
+        if (appState === "cooldown") {
+          if (now >= cooldownUntil) {
+            appState = "targeting";
+            statusBar.className = "status-bar status-targeting";
+            confirmIndicator.classList.remove("shake-confirmed", "shake-cooldown");
+            menuItems.forEach(item => item.classList.remove("confirmed"));
+            if (trialActive) {
+              statusBar.textContent = "Tilt to navigate.";
+              updateConfirmLabel("waiting");
+            } else {
+              statusBar.textContent = "Ready";
+              updateConfirmLabel("idle");
+            }
+          }
+          return;
+        }
+
+        let relBeta = smoothBeta - neutralBeta;
+        let ratio = (relBeta + TILT_RANGE) / (2 * TILT_RANGE);
+        ratio = Math.max(0, Math.min(1, ratio));
+
+        let trackHeight = scrollTrack.getBoundingClientRect().height;
+        let thumbHeight = scrollThumb.getBoundingClientRect().height;
+        scrollThumb.style.top = ratio * (trackHeight - thumbHeight) + "px";
+
+        let rawIndex = Math.min(MENU_COUNT - 1, Math.floor(ratio * MENU_COUNT));
+        let newIndex = applyHysteresis(rawIndex, relBeta);
+
+        if (newIndex !== currentIndex) {
+          currentIndex = newIndex;
+          targetStableSince = now;
+          highlightItem(currentIndex);
+        }
+
+        let stableDuration = now - targetStableSince;
+        if (stableDuration >= STABILITY_MS && appState === "targeting") {
+          confirmIndicator.classList.add("shake-ready");
+          updateConfirmLabel("ready");
+        } else if (appState === "targeting") {
+          confirmIndicator.classList.remove("shake-ready");
+          updateConfirmLabel("waiting");
+        }
+      }
+
+      function onMotion(event) {
+        let acc = event.acceleration;
+        if (!acc) return;
+        motionReceived = true;
+
+        if (currentCondition() !== "shake") return;
+        let magnitude = Math.sqrt(acc.x * acc.x + acc.y * acc.y + acc.z * acc.z);
+        if (appState !== "targeting") return;
+
+        let now = Date.now();
+        if (magnitude > SHAKE_THRESHOLD && now - lastConfirmTime > COOLDOWN_MS) {
+          let stableDuration = now - targetStableSince;
+          if (stableDuration >= STABILITY_MS && currentIndex >= 0) {
+            lastConfirmTime = now;
+            doActivation(currentIndex);
+          }
+        }
+      }
+
+      function checkSound() {
+        requestAnimationFrame(checkSound);
+        if (currentCondition() !== "sound" || !micReady || !analyser) return;
+        if (appState !== "targeting") return;
+
+        analyser.getByteTimeDomainData(audioDataArray);
+        let sum = 0;
+        for (let i = 0; i < audioDataArray.length; i++) {
+          let val = (audioDataArray[i] - 128) / 128;
+          sum += val * val;
+        }
+        let rms = Math.sqrt(sum / audioDataArray.length);
+
+        let now = Date.now();
+        if (rms > SOUND_THRESHOLD && now - lastConfirmTime > COOLDOWN_MS) {
+          let stableDuration = now - targetStableSince;
+          if (stableDuration >= STABILITY_MS && currentIndex >= 0) {
+            lastConfirmTime = now;
+            doActivation(currentIndex);
+          }
+        }
+      }
+
+      function applyHysteresis(rawIndex, relBeta) {
+        if (currentIndex < 0) return rawIndex;
+        if (rawIndex === currentIndex) return currentIndex;
+        let itemSize = (2 * TILT_RANGE) / MENU_COUNT;
+        if (rawIndex > currentIndex) {
+          let boundary = -TILT_RANGE + (currentIndex + 1) * itemSize;
+          if (relBeta > boundary + HYSTERESIS_DEG) return rawIndex;
+        } else {
+          let boundary = -TILT_RANGE + currentIndex * itemSize;
+          if (relBeta < boundary - HYSTERESIS_DEG) return rawIndex;
+        }
+        return currentIndex;
+      }
+
+      function highlightItem(index) {
+        menuItems.forEach((item, i) => {
+          item.classList.remove("highlighted", "confirmed");
+          if (i === index) item.classList.add("highlighted");
+        });
+      }
+
+      function updateConfirmLabel(state) {
+        let cond = currentCondition();
+        if (state === "idle") {
+          confirmLabel.textContent = cond === "shake" ? "Shake to select" : "Make a sound to select";
+        } else if (state === "waiting") {
+          confirmLabel.textContent = "Hold still";
+        } else if (state === "ready") {
+          confirmLabel.textContent = cond === "shake"
+            ? "Shake now for " + MENU_LABELS[currentIndex]
+            : "Make a sound now for " + MENU_LABELS[currentIndex];
+        } else if (state === "confirmed") {
+          confirmLabel.textContent = "Confirmed!";
+        } else if (state === "cooldown") {
+          confirmLabel.textContent = "Wait...";
+        }
+      }
+
+      function doActivation(index) {
+        menuItems.forEach(item => item.classList.remove("highlighted"));
+        menuItems[index].classList.add("confirmed");
+        if (navigator.vibrate) navigator.vibrate(80);
+
+        statusBar.textContent = "Selected: " + MENU_LABELS[index];
+        statusBar.className = "status-bar status-confirmed";
+        confirmIndicator.classList.remove("shake-ready");
+        confirmIndicator.classList.add("shake-confirmed");
+        updateConfirmLabel("confirmed");
+
+        recordActivation(index);
+
+        if (!trialActive) {
+          return;
+        }
+
+        cooldownUntil = Date.now() + COOLDOWN_MS;
+        appState = "cooldown";
+        confirmIndicator.classList.add("shake-cooldown");
+        setTimeout(() => { updateConfirmLabel("cooldown"); }, 300);
+      }
+
+      const SHEET_URL = "https://script.google.com/macros/s/AKfycbw0i0-_ZWfTSP1jZcOXZDW0CVRqY0u0OZHPwIyl6TLFELV_itfpTxDgdJfaWSKfDY1yiA/exec";
+
+      function submitSurvey() {
+        let surveyData = {};
+        for (let i = 1; i <= 8; i++) {
+          let selected = document.querySelector('input[name="q' + i + '"]:checked');
+          surveyData["q" + i] = selected ? parseInt(selected.value) : null;
+        }
+        if (conditionIndex === 1) {
+          let prefRadio = document.querySelector('input[name="q9"]:checked');
+          surveyData.preference = prefRadio ? prefRadio.value : null;
+          surveyData.contextComment = document.getElementById("context-text").value || "";
+          surveyData.openComment = document.getElementById("preference-text").value || "";
+          surveyData.device = document.getElementById("device-text").value || "";
+        }
+
+        allConditionResults.push({
+          condition: currentCondition(),
+          conditionOrder: conditionIndex + 1,
+          trials: trialResults,
+          survey: surveyData
+        });
+
+        if (conditionIndex === 0) {
+          conditionIndex = 1;
+          let nextCond = currentCondition();
+          document.getElementById("condition2-description").textContent =
+            nextCond === "shake"
+              ? "This time you will shake the phone to select."
+              : "This time you will make a sound to select.";
+          showScreen("condition2-screen");
+        } else {
+          submitAllData();
+        }
+      }
+
+      function startCondition2() {
+        currentIndex = -1;
+        targetStableSince = 0;
+        lastConfirmTime = 0;
+        cooldownUntil = 0;
+        showInstructions();
+      }
+
+      function postPayload(payload) {
+        return fetch(SHEET_URL, {
+          method: "POST",
+          mode: "no-cors",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify(payload)
+        });
+      }
+
+      function submitAllData() {
+        let payload = {
+          participant: participantId,
+          conditionOrder: conditionOrder.join(","),
+          conditions: allConditionResults
+        };
+
+        let submitBtn = document.querySelector("#survey-screen .btn-primary");
+        submitBtn.disabled = true;
+        submitBtn.textContent = "Submitting...";
+
+        postPayload(payload).then(() => {
+          showScreen("thankyou-screen");
+        }).catch(() => {
+          submitBtn.textContent = "Error \u2014 tap to retry";
+          submitBtn.disabled = false;
+        });
+      }
+
+      function submitTestData() {
+        let now = Date.now();
+        let payload = {
+          participant: "TEST-" + now,
+          conditionOrder: "shake,sound",
+          conditions: [
+            {
+              condition: "shake",
+              conditionOrder: 1,
+              trials: [
+                {
+                  trial: 1,
+                  target: "Netflix",
+                  selected: "Netflix",
+                  correct: true,
+                  time: 1234,
+                  retries: 0,
+                  skipped: false
+                },
+                {
+                  trial: 2,
+                  target: "YouTube",
+                  selected: "SKIPPED",
+                  correct: false,
+                  time: 4321,
+                  retries: 1,
+                  skipped: true
+                }
+              ],
+              survey: {
+                q1: 5,
+                q2: 5,
+                q3: 4,
+                q4: 3,
+                q5: 2,
+                q6: 6,
+                q7: 5,
+                q8: 4,
+                preference: "",
+                contextComment: "",
+                openComment: "Admin test submission",
+                device: "Admin test device"
+              }
+            }
+          ]
+        };
+
+        postPayload(payload).then(() => {
+          alert("Test data submitted.");
+        }).catch(() => {
+          alert("Test submission failed.");
+        });
+      }
+
+      function resetData() {
+        if (!confirm("Delete ALL data in the Google Sheet?")) return;
+        fetch(SHEET_URL + "?action=reset", { mode: "no-cors" }).then(() => {
+          alert("Reset request sent.");
+        });
+      }
+
+      requestAnimationFrame(checkSound);
+
+      if (new URLSearchParams(window.location.search).get("admin") === "1") {
+        let testBtn = document.createElement("button");
+        testBtn.className = "btn-secondary";
+        testBtn.textContent = "Submit Test Data";
+        testBtn.style.marginTop = "12px";
+        testBtn.style.marginRight = "8px";
+        testBtn.onclick = submitTestData;
+        document.querySelector("#consent-screen .card").appendChild(testBtn);
+
+        let resetBtn = document.createElement("button");
+        resetBtn.className = "btn-secondary btn-danger";
+        resetBtn.textContent = "Reset Sheet Data";
+        resetBtn.style.marginTop = "12px";
+        resetBtn.onclick = resetData;
+        document.querySelector("#consent-screen .card").appendChild(resetBtn);
+      }
+    </script>
+  </body>
+</html>

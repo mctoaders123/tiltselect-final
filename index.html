@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TiltSelect</title>
+    <style>
+      body {
+        font-family: Arial, Helvetica, sans-serif;
+        margin: 0;
+        padding: 20px;
+        background: #fafafa;
+        color: #333;
+      }
+      h1 { font-size: 1.4em; margin-bottom: 10px; }
+      .nav-btn {
+        display: block;
+        width: 100%;
+        padding: 18px;
+        margin: 10px 0;
+        font-size: 1.1em;
+        border: 2px solid #26c6da;
+        border-radius: 8px;
+        background: #e0f7fa;
+        color: #006064;
+        cursor: pointer;
+      }
+      .nav-btn:active { background: #b2ebf2; }
+      .info { font-size: 0.85em; color: #666; margin-top: 20px; }
+    </style>
+  </head>
+  <body>
+    <h1>TiltSelect</h1>
+    <p>Tilt to move through the menu, then shake or make a sound to select.</p>
+    <button class="nav-btn" id="enable-access-btn" onclick="enableAccess()">
+      Enable Access
+    </button>
+
+    <p class="info" id="access-status">
+      Enable access first, then start the evaluation. Practice is built into the evaluation.
+    </p>
+
+    <button class="nav-btn" onclick="goToEvaluation()">
+      Evaluation
+    </button>
+
+    <p class="info">
+      Open this page on a mobile device with orientation sensors.<br />
+      Use HTTPS or localhost for sensor access.
+    </p>
+
+    <script>
+      async function enableAccess() {
+        const button = document.getElementById("enable-access-btn");
+        const status = document.getElementById("access-status");
+
+        button.disabled = true;
+        button.textContent = "Enabling...";
+        status.textContent = "Allow access when your phone asks.";
+
+        try {
+          if (
+            typeof DeviceOrientationEvent !== "undefined" &&
+            typeof DeviceOrientationEvent.requestPermission === "function"
+          ) {
+            await DeviceOrientationEvent.requestPermission();
+          }
+
+          if (
+            typeof DeviceMotionEvent !== "undefined" &&
+            typeof DeviceMotionEvent.requestPermission === "function"
+          ) {
+            await DeviceMotionEvent.requestPermission();
+          }
+
+          await navigator.mediaDevices.getUserMedia({ audio: true });
+          sessionStorage.setItem("tiltselect_access_ready", "1");
+          button.textContent = "Access Enabled";
+          status.textContent =
+            "Access enabled. You can now start the evaluation.";
+        } catch (error) {
+          sessionStorage.removeItem("tiltselect_access_ready");
+          button.disabled = false;
+          button.textContent = "Enable Access";
+          status.textContent =
+            "Access was not enabled. Please try again and allow the prompts.";
+        }
+      }
+
+      function goToEvaluation() {
+        const params = new URLSearchParams(window.location.search);
+        const isAdmin = params.get("admin") === "1";
+        location.href = isAdmin ? "evaluation.html?admin=1" : "evaluation.html";
+      }
+
+      if (sessionStorage.getItem("tiltselect_access_ready") === "1") {
+        document.getElementById("enable-access-btn").textContent = "Access Enabled";
+        document.getElementById("access-status").textContent =
+          "Access is already enabled. You can now start the evaluation.";
+      }
+    </script>
+  </body>
+</html>

@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TiltSelect Practice Mode</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div id="header">
+      <h1>TiltSelect Practice Mode</h1>
+      <p class="subtitle">Tilt to move, then shake or make a sound to select</p>
+      <a href="index.html" class="back-link">&larr; Back</a>
+    </div>
+
+    <div id="calibration-overlay" class="overlay" style="display:none;">
+      <div class="overlay-content">
+        <h2>Calibration</h2>
+        <p>Hold the phone how you would normally use it, then tap below.</p>
+        <button class="cal-btn" id="calibrate-btn" onclick="calibrate()">Calibrate</button>
+        <p class="hint" id="cal-hint"></p>
+      </div>
+    </div>
+
+    <div style="display:flex; gap:0; margin-bottom:12px; border-radius:8px; overflow:hidden; border:2px solid #26c6da;">
+      <button id="mode-shake-btn" onclick="setMode('shake')" style="flex:1; padding:10px; font-size:0.9em; font-weight:bold; border:none; cursor:pointer; background:#26c6da; color:#fff;">Shake</button>
+      <button id="mode-sound-btn" onclick="setMode('sound')" style="flex:1; padding:10px; font-size:0.9em; font-weight:bold; border:none; cursor:pointer; background:#e0f7fa; color:#006064;">Sound</button>
+    </div>
+
+    <div id="status-bar" class="status-bar status-idle">Enable access on the home page to begin.</div>
+
+    <div class="shake-indicator" id="confirm-indicator">
+      <div class="shake-icon" id="confirm-icon">&#8651;</div>
+      <span id="confirm-label">Shake to select</span>
+    </div>
+
+    <div id="menu-container" class="menu-container">
+      <div class="scrollbar-track" id="scrollbar-track">
+        <div class="scrollbar-thumb" id="scrollbar-thumb"></div>
+      </div>
+      <div class="menu-items" id="menu-items">
+        <div class="menu-item" data-index="0">Netflix</div>
+        <div class="menu-item" data-index="1">YouTube</div>
+        <div class="menu-item" data-index="2">Instagram</div>
+        <div class="menu-item" data-index="3">Snapchat</div>
+        <div class="menu-item" data-index="4">WhatsApp</div>
+      </div>
+    </div>
+
+    <button class="recal-btn" onclick="showCalibration()">Recalibrate</button>
+
+    <div id="log" class="log">
+      <h3>Activation Log</h3>
+      <div id="log-entries"></div>
+    </div>
+
+    <script>
+      const MENU_COUNT = 5;
+      const MENU_LABELS = ["Netflix", "YouTube", "Instagram", "Snapchat", "WhatsApp"];
+      const TILT_RANGE = 30;
+      const SMOOTHING_FACTOR = 0.25;
+      const HYSTERESIS_DEG = 2;
+      const STABILITY_MS = 200;
+      const SHAKE_THRESHOLD = 25;
+      const SOUND_THRESHOLD = 0.15;
+      const COOLDOWN_MS = 1000;
+
+      let appState = "idle";
+      let confirmMode = "shake";
+      let calibrated = false;
+      let neutralBeta = 0;
+      let smoothBeta = null;
+      let smoothGamma = null;
+      let currentIndex = -1;
+      let targetStableSince = 0;
+      let lastConfirmTime = 0;
+      let cooldownUntil = 0;
+      let sensorsEnabled = false;
+
+      let audioContext = null;
+      let analyser = null;
+      let audioDataArray = null;
+      let micReady = false;
+
+      const menuItems = document.querySelectorAll(".menu-item");
+      const scrollThumb = document.getElementById("scrollbar-thumb");
+      const scrollTrack = document.getElementById("scrollbar-track");
+      const statusBar = document.getElementById("status-bar");
+      const logEntries = document.getElementById("log-entries");
+      const overlay = document.getElementById("calibration-overlay");
+      const confirmIcon = document.getElementById("confirm-icon");
+      const confirmLabel = document.getElementById("confirm-label");
+      const confirmIndicator = document.getElementById("confirm-indicator");
+
+      function setMode(mode) {
+        confirmMode = mode;
+        let shakeBtn = document.getElementById("mode-shake-btn");
+        let soundBtn = document.getElementById("mode-sound-btn");
+        if (mode === "shake") {
+          shakeBtn.style.background = "#26c6da";
+          shakeBtn.style.color = "#fff";
+          soundBtn.style.background = "#e0f7fa";
+          soundBtn.style.color = "#006064";
+          confirmIcon.innerHTML = "&#8651;";
+          confirmLabel.textContent = "Shake to select";
+        } else {
+          soundBtn.style.background = "#26c6da";
+          soundBtn.style.color = "#fff";
+          shakeBtn.style.background = "#e0f7fa";
+          shakeBtn.style.color = "#006064";
+          confirmIcon.innerHTML = "&#127908;";
+          confirmLabel.textContent = "Make a sound to select";
+          initMic();
+        }
+      }
+
+      async function initMic() {
+        if (micReady) return;
+        try {
+          let stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          audioContext = new (window.AudioContext || window.webkitAudioContext)();
+          let source = audioContext.createMediaStreamSource(stream);
+          analyser = audioContext.createAnalyser();
+          analyser.fftSize = 512;
+          source.connect(analyser);
+          audioDataArray = new Uint8Array(analyser.fftSize);
+          micReady = true;
+        } catch (err) {
+          confirmLabel.textContent = "Microphone unavailable";
+        }
+      }
+
+      function checkSound() {
+        requestAnimationFrame(checkSound);
+        if (confirmMode !== "sound" || !micReady || !analyser) return;
+        if (!calibrated || appState !== "targeting") return;
+
+        analyser.getByteTimeDomainData(audioDataArray);
+        let sum = 0;
+        for (let i = 0; i < audioDataArray.length; i++) {
+          let val = (audioDataArray[i] - 128) / 128;
+          sum += val * val;
+        }
+        let rms = Math.sqrt(sum / audioDataArray.length);
+
+        let now = Date.now();
+        if (rms > SOUND_THRESHOLD && now - lastConfirmTime > COOLDOWN_MS) {
+          let stableDuration = now - targetStableSince;
+          if (stableDuration >= STABILITY_MS && currentIndex >= 0) {
+            lastConfirmTime = now;
+            activateItem(currentIndex);
+          }
+        }
+      }
+      requestAnimationFrame(checkSound);
+
+      function showCalibration() {
+        if (!sensorsEnabled) {
+          statusBar.textContent = "Go back and enable access first.";
+          document.getElementById("cal-hint").textContent = "Enable access on the home page first.";
+          return;
+        }
+        overlay.style.display = "flex";
+        appState = "calibrating";
+        document.getElementById("cal-hint").textContent = "";
+      }
+
+      function calibrate() {
+        if (smoothBeta === null) {
+          document.getElementById("cal-hint").textContent =
+            "Waiting for sensor data. Make sure sensors are enabled.";
+          return;
+        }
+        neutralBeta = smoothBeta;
+        calibrated = true;
+        document.getElementById("cal-hint").textContent = "Calibrated!";
+
+        setTimeout(() => {
+          overlay.style.display = "none";
+          appState = "targeting";
+          statusBar.textContent = "Tilt to navigate.";
+          statusBar.className = "status-bar status-targeting";
+        }, 600);
+      }
+
+      function expSmooth(current, previous, alpha) {
+        if (previous === null) return current;
+        return alpha * current + (1 - alpha) * previous;
+      }
+
+      function onOrientation(event) {
+        let beta = event.beta;
+        smoothBeta = expSmooth(beta, smoothBeta, SMOOTHING_FACTOR);
+        smoothGamma = expSmooth(event.gamma, smoothGamma, SMOOTHING_FACTOR);
+
+        if (!calibrated || appState === "calibrating") return;
+
+        let now = Date.now();
+
+        if (appState === "cooldown") {
+          if (now >= cooldownUntil) {
+            appState = "targeting";
+            statusBar.textContent = "Tilt to navigate.";
+            statusBar.className = "status-bar status-targeting";
+            confirmLabel.textContent = confirmMode === "shake" ? "Shake to select" : "Make a sound to select";
+            confirmIndicator.classList.remove("shake-cooldown", "shake-confirmed");
+            menuItems.forEach(item => item.classList.remove("confirmed"));
+          }
+          return;
+        }
+
+        let relBeta = smoothBeta - neutralBeta;
+        let ratio = (relBeta + TILT_RANGE) / (2 * TILT_RANGE);
+        ratio = Math.max(0, Math.min(1, ratio));
+
+        let trackHeight = scrollTrack.getBoundingClientRect().height;
+        let thumbHeight = scrollThumb.getBoundingClientRect().height;
+        scrollThumb.style.top = ratio * (trackHeight - thumbHeight) + "px";
+
+        let rawIndex = Math.min(MENU_COUNT - 1, Math.floor(ratio * MENU_COUNT));
+        let newIndex = applyHysteresis(rawIndex, relBeta);
+
+        if (newIndex !== currentIndex) {
+          currentIndex = newIndex;
+          targetStableSince = now;
+          highlightItem(currentIndex);
+        }
+
+        let stableDuration = now - targetStableSince;
+        if (stableDuration >= STABILITY_MS && appState === "targeting") {
+          confirmIndicator.classList.add("shake-ready");
+          confirmLabel.textContent = (confirmMode === "shake" ? "Shake now for " : "Make a sound now for ") + MENU_LABELS[currentIndex];
+        } else if (appState === "targeting") {
+          confirmIndicator.classList.remove("shake-ready");
+          confirmLabel.textContent = "Hold still";
+        }
+      }
+
+      function onMotion(event) {
+        if (confirmMode !== "shake") return;
+        let acc = event.acceleration;
+        if (!acc) return;
+
+        let magnitude = Math.sqrt(acc.x * acc.x + acc.y * acc.y + acc.z * acc.z);
+        if (!calibrated || appState !== "targeting") return;
+
+        let now = Date.now();
+        if (magnitude > SHAKE_THRESHOLD && now - lastConfirmTime > COOLDOWN_MS) {
+          let stableDuration = now - targetStableSince;
+          if (stableDuration >= STABILITY_MS && currentIndex >= 0) {
+            lastConfirmTime = now;
+            activateItem(currentIndex);
+          }
+        }
+      }
+
+      function applyHysteresis(rawIndex, relBeta) {
+        if (currentIndex < 0) return rawIndex;
+        if (rawIndex === currentIndex) return currentIndex;
+        let itemSize = (2 * TILT_RANGE) / MENU_COUNT;
+        if (rawIndex > currentIndex) {
+          let boundary = -TILT_RANGE + (currentIndex + 1) * itemSize;
+          if (relBeta > boundary + HYSTERESIS_DEG) return rawIndex;
+        } else {
+          let boundary = -TILT_RANGE + currentIndex * itemSize;
+          if (relBeta < boundary - HYSTERESIS_DEG) return rawIndex;
+        }
+        return currentIndex;
+      }
+
+      function highlightItem(index) {
+        menuItems.forEach((item, i) => {
+          item.classList.remove("highlighted", "confirmed");
+          if (i === index) item.classList.add("highlighted");
+        });
+        if (appState === "targeting") {
+          statusBar.textContent = "Tilt to navigate.";
+        }
+      }
+
+      function activateItem(index) {
+        menuItems.forEach(item => item.classList.remove("highlighted"));
+        menuItems[index].classList.add("confirmed");
+        statusBar.textContent = "Activated: " + MENU_LABELS[index];
+        statusBar.className = "status-bar status-confirmed";
+
+        confirmIndicator.classList.remove("shake-ready");
+        confirmIndicator.classList.add("shake-confirmed");
+        confirmLabel.textContent = "Confirmed!";
+
+        if (navigator.vibrate) navigator.vibrate(80);
+
+        let entry = document.createElement("div");
+        entry.className = "log-entry";
+        entry.textContent = new Date().toLocaleTimeString() + " \u2014 " + MENU_LABELS[index];
+        logEntries.prepend(entry);
+
+        cooldownUntil = Date.now() + COOLDOWN_MS;
+        appState = "cooldown";
+        confirmIndicator.classList.add("shake-cooldown");
+        confirmLabel.textContent = "Wait a moment";
+      }
+
+      async function startPracticeMode() {
+        if (sessionStorage.getItem("tiltselect_access_ready") !== "1") {
+          statusBar.textContent = "Go back and enable access first.";
+          return;
+        }
+
+        window.addEventListener("deviceorientation", onOrientation);
+        window.addEventListener("devicemotion", onMotion);
+        await initMic();
+
+        sensorsEnabled = true;
+        statusBar.textContent = "Calibrate to begin.";
+        showCalibration();
+      }
+
+      startPracticeMode();
+    </script>
+  </body>
+</html>
